@@ -1,6 +1,6 @@
 @file:Suppress("UnstableApiUsage")
 
-rootProject.name = "cl-plugin-template"
+rootProject.name = "carbon-japanizer"
 
 dependencyResolutionManagement {
     repositories {

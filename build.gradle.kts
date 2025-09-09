@@ -1,5 +1,4 @@
-import xyz.jpenilla.resourcefactory.bukkit.Permission
-import xyz.jpenilla.resourcefactory.paper.PaperPluginYaml.Load
+import xyz.jpenilla.resourcefactory.paper.PaperPluginYaml
 
 val projectVersion: String by project
 version = projectVersion
@@ -8,7 +7,9 @@ plugins {
     id("java")
     id("checkstyle")
     alias(libs.plugins.shadow)
-    alias(libs.plugins.resource.factory)
+    alias(libs.plugins.resource.factory.velocity)
+    alias(libs.plugins.resource.factory.paper)
+    alias(libs.plugins.run.velocity)
     alias(libs.plugins.run.paper)
     alias(libs.plugins.gremlin)
     alias(libs.plugins.indra.licenser.spotless)
@@ -19,50 +20,72 @@ java {
 }
 
 dependencies {
-    // Paper
+    // Velocity
+    compileOnly(libs.velocity.api)
     compileOnly(libs.paper.api)
 
     // Integrations
     compileOnly(libs.mini.placeholders)
+    compileOnly(libs.carbon)
 
     // Libraries
-    compileOnly(libs.configurate.yaml) // Paperに組み込んである
-    runtimeDownload(libs.adventure.serializer.configurate)
+    implementation(libs.cloud.velocity)
+    implementation(libs.cloud.paper)
+    implementation(libs.configurate.hocon)
+    implementation(libs.adventure.serializer.configurate)
     implementation(libs.doburoku.standard)
 
     // Annotation processor
     annotationProcessor(libs.doburoku.annotation.processor)
+
+    // Database
+    runtimeDownload(libs.h2)
+    runtimeDownload(libs.mysql)
+    runtimeDownload(libs.hikariCP)
+    runtimeDownload(libs.jdbiCore)
+    runtimeDownload(libs.jdbiSqlObject)
+    runtimeDownload(libs.flyway)
+    runtimeDownload(libs.flywayMysql) {
+        isTransitive = false
+    }
+
+    // Misc
+    runtimeDownload(libs.caffeine)
 }
 
-val mainPackage = "$group.papertemplate" // TODO: パッケージ名を変更
+val mainPackage = "$group.carbonjapanizer"
 paperPluginYaml {
-    name = "PaperTemplate" // TODO: プラグイン名を変更
-    author = "Namiu (うにたろう)" // TODO: 自分の名前に変更
+    name = "CarbonJapanizer"
+    main = "$mainPackage.platform.paper.PaperCarbonJapanizer"
+    bootstrapper = "$mainPackage.platform.paper.PaperCarbonJapanizerBootstrapper"
+    loader = "$mainPackage.platform.paper.PaperCarbonJapanizerLoader"
+    apiVersion = "1.21.5"
+    authors = listOf("Namiu (うにたろう)")
     website = "https://github.com/CraftersLife-Dev"
-    apiVersion = "1.21"
-
-    main = "$mainPackage.minecraft.paper.JavaPluginImpl"
-    bootstrapper = "$mainPackage.minecraft.paper.PluginBootstrapImpl"
-    loader = "$mainPackage.minecraft.paper.PluginLoaderImpl"
-
-    permissions {
-        register("${paperPluginYaml.name.get().lowercase()}.command.admin") {
-            description = "${paperPluginYaml.name}の管理者系コマンド"
-            default = Permission.Default.OP
-        }
-    }
 
     dependencies {
-        server("MiniPlaceholders", Load.BEFORE, false)
-        server("LuckPerms", Load.BEFORE, false)
+        server("LuckPerms", PaperPluginYaml.Load.BEFORE, false)
+        server("MiniPlaceholders", PaperPluginYaml.Load.BEFORE, false)
+        server("CarbonChat", PaperPluginYaml.Load.BEFORE, true)
     }
+}
+velocityPluginJson {
+    id = "carbonjapanizer"
+    name = "CarbonJapanizer"
+    version = rootProject.version.toString()
+    description = project.description
+    authors = listOf("Namiu (うにたろう)")
+    main = "$mainPackage.platform.velocity.VelocityCarbonJapanizer"
+    dependency("signedvelocity")
+    dependency("luckperms", true)
+    dependency("carbonchat")
 }
 
 indraSpotlessLicenser {
     licenseHeaderFile(rootProject.file("LICENSE_HEADER"))
-    property("name", paperPluginYaml.name)
-    property("author", paperPluginYaml.author)
-    property("contributors", paperPluginYaml.contributors)
+    property("name", "CarbonJapanizer")
+    property("author", "Namiu (うにたろう)")
+    property("contributors", "")
 }
 
 configurations {
@@ -77,32 +100,43 @@ tasks {
     }
 
     shadowJar {
-        archiveBaseName = paperPluginYaml.name
+        archiveBaseName = velocityPluginJson.name
         archiveClassifier = null as String?
         gremlin {
             listOf("xyz.jpenilla.gremlin")
                 .forEach {
-                    relocate(it, "$mainPackage.libs.$it")
+                    relocate(it, "$mainPackage.libraries.$it")
                 }
         }
     }
 
     runServer {
-        // runディレクトリの中にlog4j2.xmlを突っ込むとログの設定を変更可能
-        // Paper: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/resources/log4j2.xml
+        minecraftVersion("1.21.4")
+        runDirectory(File("run-paper"))
         systemProperty("log4j.configurationFile", "log4j2.xml")
-        minecraftVersion("1.21.8")
         downloadPlugins {
             modrinth("luckperms", "v5.5.0-bukkit")
-            url("https://ci.codemc.io/job/MiniPlaceholders/job/MiniPlaceholders/14/artifact/jar/MiniPlaceholders-Paper-2.3.1-SNAPSHOT.jar")
-            modrinth("miniplaceholders-placeholderapi-expansion", "1.2.0")
-            hangar("PlaceholderAPI", "2.11.6")
+            modrinth("miniplaceholders", "7caNTwMh")
+//            modrinth("carbon", "H4KLsB5g")
+        }
+    }
+
+    runVelocity {
+        velocityVersion("3.4.0-SNAPSHOT")
+        runDirectory(File("run-velocity"))
+        systemProperty("log4j.configurationFile", "log4j2.xml")
+        downloadPlugins {
+            modrinth("signedvelocity", "1.3.0")
+            modrinth("luckperms", "v5.5.0-velocity")
+            modrinth("miniplaceholders", "fW9GvvXS")
+//            modrinth("carbon", "JdcV6BZb")
         }
     }
 
     writeDependencies {
         repos.add("https://repo.papermc.io/repository/maven-public/")
         repos.add("https://repo.maven.apache.org/maven2/")
+        repos.add("https://central.sonatype.com/repository/maven-snapshots/")
     }
 
     checkstyle {
